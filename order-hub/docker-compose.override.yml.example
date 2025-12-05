@@ -1,0 +1,44 @@
+# Example override file for local development
+# Copy this to docker-compose.override.yml and customize
+
+version: '3.8'
+
+services:
+  backend:
+    environment:
+      # Override environment variables for local development
+      LOG_LEVEL: debug
+      NODE_ENV: development
+
+
+
+
+# Copy this to docker-compose.override.yml and customize
+
+version: '3.8'
+
+services:
+  backend:
+    environment:
+      # Override environment variables for local development
+      LOG_LEVEL: debug
+      NODE_ENV: development
+
+
+
+
+# Copy this to docker-compose.override.yml and customize
+
+version: '3.8'
+
+services:
+  backend:
+    environment:
+      # Override environment variables for local development
+      LOG_LEVEL: debug
+      NODE_ENV: development
+
+
+
+
+
