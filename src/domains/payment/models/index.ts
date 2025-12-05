@@ -7,6 +7,7 @@
 export {
   PaymentStatus,
   PaymentProvider,
+  PaymentMethod,
   PAYMENT_STATUS_TRANSITIONS,
   isValidPaymentStatusTransition,
 } from './payment-status.enum';

@@ -8,6 +8,7 @@ import ordersRoutes from './orders/orders.routes';
 import paymentsRoutes from './payments/payments.routes';
 import webhooksRoutes from './webhooks/webhooks.routes';
 import providersRoutes from './providers/providers.routes';
+import terminalRoutes from './terminal/terminal.routes';
 
 const router = Router();
 
@@ -16,6 +17,7 @@ router.use('/orders', ordersRoutes);
 router.use('/payments', paymentsRoutes);
 router.use('/webhooks', webhooksRoutes);
 router.use('/providers', providersRoutes);
+router.use('/terminal', terminalRoutes);
 
 // API v1 health check
 router.get('/health', (_req, res) => {

@@ -9,10 +9,13 @@ import { orderRepository } from '../../order/repositories';
 import {
   Payment,
   PaymentStatus,
+  PaymentProvider,
+  PaymentMethod,
   CreatePaymentInput,
   UpdatePaymentInput,
   isValidPaymentStatusTransition,
 } from '../models';
+import { StripeTerminalAdapter } from '../../../adapters/stripe/stripe-terminal.adapter';
 
 export class PaymentService {
   /**
@@ -111,6 +114,83 @@ export class PaymentService {
    */
   async getPaymentsByStatus(status: PaymentStatus, limit: number = 100): Promise<Payment[]> {
     return await paymentRepository.findByStatus(status, limit);
+  }
+
+  /**
+   * Create a terminal payment
+   * - Validates order exists
+   * - Creates Stripe Terminal Payment Intent
+   * - Generates connection token
+   * - Creates payment record in database
+   */
+  async createTerminalPayment(input: {
+    order_id: string;
+    amount: number;
+    currency: string;
+    location_id?: string;
+    reader_id?: string;
+    metadata?: Record<string, any>;
+  }): Promise<Payment> {
+    // Validate order exists
+    const order = await orderRepository.findById(input.order_id);
+    if (!order) {
+      throw new Error(`Order ${input.order_id} not found`);
+    }
+
+    // Validate amount
+    if (input.amount <= 0) {
+      throw new Error('amount must be greater than 0');
+    }
+
+    // Get Stripe API key
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const stripeApiKey = (process as any).env?.STRIPE_SECRET_KEY;
+    if (!stripeApiKey) {
+      throw new Error('STRIPE_SECRET_KEY environment variable is not set');
+    }
+
+    // Create Stripe Terminal adapter
+    const terminalAdapter = new StripeTerminalAdapter(stripeApiKey);
+
+    // Create Terminal Payment Intent
+    const terminalResponse = await terminalAdapter.createTerminalPaymentIntent({
+      order_id: input.order_id,
+      amount: input.amount,
+      currency: input.currency,
+      location_id: input.location_id,
+      reader_id: input.reader_id,
+      metadata: {
+        ...input.metadata,
+        source: 'pos',
+        payment_method_type: 'terminal',
+      },
+    });
+
+    // Create payment record
+    const payment = await paymentRepository.create({
+      order_id: input.order_id,
+      provider: PaymentProvider.STRIPE,
+      payment_method: PaymentMethod.TERMINAL_CARD, // Default, can be changed based on actual collection
+      amount: input.amount,
+      currency: input.currency,
+      metadata: {
+        ...input.metadata,
+        terminal_location_id: input.location_id,
+        terminal_reader_id: input.reader_id,
+        connection_token: terminalResponse.connection_token,
+        connection_token_expires_at: terminalResponse.expires_at.toString(),
+        payment_method_type: 'terminal',
+      },
+    });
+
+    // Update payment with provider_reference (after creation, since it's not in CreatePaymentInput)
+    const updatedPayment = await paymentRepository.update(payment.id, {
+      provider_reference: terminalResponse.payment_intent_id,
+    });
+
+    return updatedPayment || payment;
+
+    return payment;
   }
 
   /**

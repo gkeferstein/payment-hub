@@ -26,6 +26,22 @@ export enum PaymentProvider {
 }
 
 /**
+ * Payment Method Enum
+ * Defines supported payment methods
+ */
+export enum PaymentMethod {
+  // Online methods
+  CARD = 'card',
+  SEPA_DEBIT = 'sepa_debit',
+  BITCOIN = 'bitcoin',
+  
+  // Terminal methods
+  TERMINAL_CARD = 'terminal_card',      // Card inserted/tapped at terminal
+  TERMINAL_TAP = 'terminal_tap',         // Contactless payment at terminal
+  TERMINAL_MANUAL = 'terminal_manual',   // Manual entry at terminal
+}
+
+/**
  * Valid status transitions for payments
  */
 export const PAYMENT_STATUS_TRANSITIONS: Record<PaymentStatus, PaymentStatus[]> = {
