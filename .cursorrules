@@ -1,0 +1,1054 @@
+# Universal Commerce HUB - Cursor Rules
+# CTO Best Practices & Development Standards
+
+## 🔄 Arbeitsprozess & Entwicklungsmethodik
+
+### Iterative Entwicklung mit To-Do-Management
+- **IMMER zuerst**: Saubere, spezifische To-Dos definieren bevor Code geschrieben wird
+- **To-Do-Struktur**: Jedes To-Do muss klar, testbar und abgrenzbar sein
+- **Schritt-für-Schritt**: Nur EIN To-Do zur Zeit bearbeiten
+- **Test-First**: Jeder Schritt MUSS getestet sein, bevor der nächste beginnt
+- **Keine Parallel-Entwicklung**: Kein neues Feature starten, wenn das aktuelle nicht getestet ist
+
+### To-Do-Definition (Pflicht vor jedem Feature)
+Jedes To-Do MUSS enthalten:
+1. **Klare Beschreibung**: Was wird implementiert?
+2. **Akzeptanzkriterien**: Wann ist es fertig?
+3. **Test-Plan**: Wie wird es getestet?
+4. **Abhängigkeiten**: Was muss vorher fertig sein?
+5. **Schätzung**: Realistische Zeitschätzung
+
+### Entwicklungszyklus (STRICT)
+```
+1. To-Do definieren & dokumentieren
+   ↓
+2. Tests schreiben (TDD wenn möglich)
+   ↓
+3. Minimaler Code für To-Do
+   ↓
+4. Tests laufen lassen & grün bekommen
+   ↓
+5. Code-Review (selbst oder Team)
+   ↓
+6. Linting & Formatting prüfen
+   ↓
+7. Integration testen (falls relevant)
+   ↓
+8. To-Do als "Done" markieren
+   ↓
+9. NÄCHSTES To-Do starten
+```
+
+### Testing zwischen Schritten
+- **Unit Tests**: Nach jeder Funktion/Methode
+- **Integration Tests**: Nach jedem API-Endpunkt
+- **E2E Tests**: Nach jedem kompletten Flow
+- **Manuelle Tests**: Nach jedem größeren Feature
+- **Kein Commit**: Ohne grüne Tests
+
+### To-Do-Größe
+- **Ideal**: 1-4 Stunden Arbeit
+- **Maximum**: 1 Tag Arbeit
+- **Zu groß?**: To-Do in kleinere To-Dos aufteilen
+- **Zu klein?**: Mehrere zusammengehörige To-Dos zusammenfassen
+
+### Definition of Done (DoD)
+Ein To-Do ist NUR fertig wenn:
+- [ ] Code implementiert
+- [ ] Tests geschrieben & grün
+- [ ] Linting bestanden
+- [ ] Code-Review durchgeführt (falls Team vorhanden)
+- [ ] Dokumentation aktualisiert (falls nötig)
+- [ ] Keine bekannten Bugs
+- [ ] Integration funktioniert (falls relevant)
+
+### Fehlerbehandlung im Prozess
+- **Tests schlagen fehl?**: Code fixen, nicht Tests anpassen (außer Test war falsch)
+- **Linting-Fehler?**: Sofort fixen, nicht ignorieren
+- **Unklare Anforderungen?**: STOPPEN, klären, dann weiter
+- **Technische Schulden entdeckt?**: In separates To-Do auslagern, nicht jetzt fixen
+
+### Kommunikation
+- **Blockiert?**: Sofort kommunizieren, nicht stundenlang grübeln
+- **To-Do größer als gedacht?**: Aufteilen oder Schätzung anpassen
+- **Unklarheit?**: Fragen stellen, nicht raten
+
+## 🏗️ Architektur-Prinzipien
+
+### Modularer Monolith (NICHT Microservices)
+- Wir bauen einen modularen Monolithen, keine Microservices
+- Klare Domänentrennung: Order, Payment, Customer, Event
+- Jede Domäne hat eigene Services, aber läuft im selben Prozess
+- Keine verteilten Transaktionen - alles in einer DB
+- Einfache Skalierung durch horizontales Scaling des gesamten Monolithen
+
+### Single Source of Truth
+- Die HUB-Datenbank ist die einzige Quelle der Wahrheit für Orders & Payments
+- Externe Systeme (WooCommerce, POS) sind nur SPOKES - keine Autorität
+- Alle Status-Änderungen gehen durch den HUB
+- Keine direkte Kommunikation zwischen SPOKES
+
+### Entkopplung & Abstraktion
+- HUB kennt keine WooCommerce-spezifischen Details
+- Payment-Provider sind über Adapter abstrahiert
+- Channels (Woo/POS/B2B) sind austauschbar
+- Keine direkten Abhängigkeiten zu externen Systemen im Core
+
+## 🔒 Sicherheit & API-Design
+
+### API-Sicherheit
+- ALLE API-Endpunkte MÜSSEN authentifiziert sein (API Keys oder OAuth2)
+- Webhook-Endpunkte MÜSSEN Signaturen validieren (Stripe, BTCPay)
+- Rate Limiting auf allen öffentlichen Endpunkten
+- Input Validation auf allen Endpunkten (JSON Schema)
+- Keine SQL-Injection: IMMER Prepared Statements / ORM
+- Keine direkten DB-Queries mit String-Interpolation
+
+### API-Versionierung
+- Alle Endpunkte unter `/api/v1/` versionieren
+- Breaking Changes = neue Version (`/api/v2/`)
+- Backward Compatibility für mindestens 1 Major Version
+- Deprecation-Warnungen in Headers
+
+### Idempotenz (KRITISCH)
+- ALLE POST/PUT/PATCH Endpunkte MÜSSEN idempotent sein
+- Idempotency-Key im Header erforderlich für kritische Operationen
+- Duplikate erkennen und gleiche Response zurückgeben
+- Keine doppelten Orders/Payments bei Retries
+
+### Webhook-Sicherheit
+- Webhook-Signaturen IMMER validieren (Stripe: X-Stripe-Signature, BTCPay: BTCPay-Sig)
+- Webhook-Payloads niemals blind vertrauen
+- Rate Limiting auf Webhook-Endpunkten
+- Idempotente Webhook-Verarbeitung (gleiche Webhook-ID = keine Duplikate)
+
+## 💾 Datenbank-Design
+
+### Transaktionssicherheit
+- Kritische Operationen (Order erstellen, Payment verarbeiten) in Transaktionen
+- ACID-Compliance für alle Status-Änderungen
+- Keine Race Conditions bei Status-Updates
+- Optimistic Locking für concurrent Updates
+
+### Historisierung & Auditing
+- JEDE Status-Änderung in History-Tabellen schreiben
+- `order_status_history` und `payment_status_history` sind Pflicht
+- Timestamps mit Timezone (UTC)
+- User/System-Information für Audit-Trail
+- Keine Löschungen (Soft Deletes mit `deleted_at`)
+
+### Datenintegrität
+- Foreign Keys für alle Referenzen
+- NOT NULL Constraints wo sinnvoll
+- Unique Constraints für Business-Keys (z.B. source + source_order_id)
+- Check Constraints für Status-Validierung
+- Indexes auf alle Foreign Keys und häufig abgefragte Spalten
+
+### Migrationen
+- Alle DB-Änderungen über Migrations
+- Keine direkten ALTER TABLE in Production
+- Rollback-fähige Migrations
+- Migrations sind versioniert und getestet
+
+## 🔄 Event-Handling & Orchestrierung
+
+### Event-Idempotenz
+- Events MÜSSEN idempotent verarbeitet werden
+- Event-ID als deduplizierungsschlüssel
+- Gleiche Event-ID = keine doppelte Verarbeitung
+- Event-History für Debugging & Reconciliation
+
+### Retry-Mechanismen
+- Exponential Backoff für fehlgeschlagene Events
+- Dead Letter Queue für Events, die nach X Retries fehlschlagen
+- Manuelle Retry-Möglichkeit für Support
+- Keine endlosen Retry-Loops
+
+### Callback-Mechanismen
+- Callbacks an Channels (Woo/POS) MÜSSEN idempotent sein
+- Retry-Logik für fehlgeschlagene Callbacks
+- Timeout-Handling (max 30s für Callbacks)
+- Callback-Status-Tracking (erfolgreich/fehlgeschlagen)
+
+## 🧪 Testing-Standards
+
+### Test-Pyramide
+- Unit Tests: 80% Coverage für Business-Logic
+- Integration Tests: Alle API-Endpunkte
+- E2E Tests: Komplette Flows (Woo → HUB → Stripe → HUB → Woo)
+- Webhook-Simulationen: Stripe CLI, BTCPay Test-Server
+
+### Test-Daten
+- Keine Production-Daten in Tests
+- Factory-Pattern für Test-Daten
+- Isolierte Test-Datenbank
+- Cleanup nach jedem Test
+
+### Test-Kritikalität
+- Payment-Flows MÜSSEN getestet sein
+- Order-Status-Transitions MÜSSEN getestet sein
+- Webhook-Handler MÜSSEN getestet sein
+- Idempotenz MUSS getestet sein
+
+## 📝 Code-Qualität & Standards
+
+### Clean Code
+- Funktionen max. 50 Zeilen
+- Klassen max. 300 Zeilen
+- DRY: Don't Repeat Yourself
+- SOLID-Prinzipien befolgen
+- Meaningful Names (keine Abkürzungen außer etablierten)
+
+### Code-Organisation
+```
+/src
+  /domains
+    /order
+      /services
+      /models
+      /repositories
+    /payment
+      /services
+      /models
+      /repositories
+    /customer
+    /event
+  /adapters
+    /woocommerce
+    /stripe
+    /btcpay
+  /api
+    /v1
+      /orders
+      /payments
+      /webhooks
+  /infrastructure
+    /database
+    /logging
+    /monitoring
+```
+
+### Linting & Formatting
+- ESLint/TSLint für TypeScript/JavaScript
+- Prettier für Code-Formatting
+- Pre-commit Hooks für Linting
+- CI/CD Pipeline bricht bei Linting-Fehlern
+
+### Type Safety
+- TypeScript STRICTLY verwenden (kein `any`)
+- Typen für alle API-Requests/Responses
+- JSON Schema Validation für externe Inputs
+- Runtime-Validierung mit Zod/Joi
+
+## 🚀 Deployment & CI/CD
+
+### CI/CD-Pipeline
+- Automatische Tests bei jedem Commit
+- Linting & Type-Checking vor Merge
+- Automatisches Deployment nach erfolgreichen Tests
+- Staging-Environment vor Production
+- Rollback-Strategie vorhanden
+
+### Environment-Management
+- Keine Secrets im Code
+- Environment Variables für alle Konfigurationen
+- Separate Configs für Dev/Staging/Production
+- Database Migrations automatisch bei Deployment
+
+### Monitoring & Observability
+- Strukturierte Logs (JSON-Format)
+- Log-Level: DEBUG, INFO, WARN, ERROR
+- Request-ID für Request-Tracking
+- Health-Checks für alle Services
+- Metrics für kritische Operationen (Order-Creation, Payment-Processing)
+
+## 🔌 Integration-Standards
+
+### Payment-Provider-Adapter
+- Einheitliche Adapter-Interface für alle Provider
+- Provider-spezifische Logik isoliert
+- Fehlerbehandlung pro Provider
+- Retry-Logik pro Provider konfigurierbar
+
+### Channel-Adapter (WooCommerce, POS, B2B)
+- Mapping-Logik in Adaptern, nicht im Core
+- Channel-spezifische Daten in `metadata` JSON-Feld
+- Callback-URLs pro Channel konfigurierbar
+- Fehlerbehandlung & Reconciliation pro Channel
+
+### Webhook-Handler
+- Provider-spezifische Handler (Stripe, BTCPay)
+- Signature-Validierung MUSS
+- Idempotente Verarbeitung
+- Async-Verarbeitung für lange Operationen
+
+## 🚫 NOT-TO-DO Liste
+
+### Was NIEMALS in den HUB gehört:
+- ❌ Frontend-Logik (UI, Templates, CSS)
+- ❌ WooCommerce-spezifische Business-Logik
+- ❌ Payment-Provider-spezifische Logik im Core (nur in Adaptern)
+- ❌ Direkte Datenbank-Zugriffe ohne Repository-Pattern
+- ❌ Hardcoded Secrets oder API-Keys
+- ❌ Synchrones Blocking auf externe APIs (außer kritischen Flows)
+- ❌ Keine Validierung von Inputs
+- ❌ Keine Error-Handling
+- ❌ Direkte SQL-Queries mit String-Interpolation
+- ❌ Keine Transaktionen bei kritischen Operationen
+- ❌ Keine Idempotenz-Checks
+- ❌ Keine Webhook-Signatur-Validierung
+
+## 📊 Performance & Skalierung
+
+### Datenbank-Performance
+- Indexes auf alle Foreign Keys
+- Indexes auf häufig abgefragte Spalten (status, source, created_at)
+- Partitioning für große History-Tabellen (nach Datum)
+- Query-Optimierung (keine N+1 Queries)
+
+### API-Performance
+- Pagination für List-Endpunkte (max 100 Items pro Request)
+- Caching für nicht-kritische Daten (Customer-Info, etc.)
+- Async-Verarbeitung für nicht-kritische Operationen
+- Timeout-Handling für externe API-Calls (max 30s)
+
+## 🔍 Code-Review-Checkliste
+
+Vor jedem Merge prüfen:
+- [ ] Idempotenz implementiert?
+- [ ] Input Validation vorhanden?
+- [ ] Error Handling vorhanden?
+- [ ] Tests geschrieben?
+- [ ] Linting bestanden?
+- [ ] Keine Secrets im Code?
+- [ ] Transaktionen für kritische Operationen?
+- [ ] History-Tabellen aktualisiert?
+- [ ] Logging vorhanden?
+- [ ] Dokumentation aktualisiert?
+
+## 🎯 Prioritäten
+
+### P0 (Kritisch - Blockiert Release)
+- Payment-Processing funktioniert
+- Order-Status-Synchronisation funktioniert
+- Webhook-Signatur-Validierung
+- Idempotenz für alle kritischen Endpunkte
+
+### P1 (Wichtig - Sollte im MVP sein)
+- WooCommerce Integration
+- Stripe Integration
+- Order/Payment History
+- Error Handling & Logging
+
+### P2 (Nice-to-Have - Kann später kommen)
+- BTCPay Integration
+- POS Integration
+- B2B-Vertragsstrecke
+- Erweiterte Monitoring-Dashboards
+
+---
+
+**Diese Regeln sind bindend für alle Entwickler. Bei Fragen oder Unklarheiten: CTO konsultieren.**
+
+
+
+## 🔄 Arbeitsprozess & Entwicklungsmethodik
+
+### Iterative Entwicklung mit To-Do-Management
+- **IMMER zuerst**: Saubere, spezifische To-Dos definieren bevor Code geschrieben wird
+- **To-Do-Struktur**: Jedes To-Do muss klar, testbar und abgrenzbar sein
+- **Schritt-für-Schritt**: Nur EIN To-Do zur Zeit bearbeiten
+- **Test-First**: Jeder Schritt MUSS getestet sein, bevor der nächste beginnt
+- **Keine Parallel-Entwicklung**: Kein neues Feature starten, wenn das aktuelle nicht getestet ist
+
+### To-Do-Definition (Pflicht vor jedem Feature)
+Jedes To-Do MUSS enthalten:
+1. **Klare Beschreibung**: Was wird implementiert?
+2. **Akzeptanzkriterien**: Wann ist es fertig?
+3. **Test-Plan**: Wie wird es getestet?
+4. **Abhängigkeiten**: Was muss vorher fertig sein?
+5. **Schätzung**: Realistische Zeitschätzung
+
+### Entwicklungszyklus (STRICT)
+```
+1. To-Do definieren & dokumentieren
+   ↓
+2. Tests schreiben (TDD wenn möglich)
+   ↓
+3. Minimaler Code für To-Do
+   ↓
+4. Tests laufen lassen & grün bekommen
+   ↓
+5. Code-Review (selbst oder Team)
+   ↓
+6. Linting & Formatting prüfen
+   ↓
+7. Integration testen (falls relevant)
+   ↓
+8. To-Do als "Done" markieren
+   ↓
+9. NÄCHSTES To-Do starten
+```
+
+### Testing zwischen Schritten
+- **Unit Tests**: Nach jeder Funktion/Methode
+- **Integration Tests**: Nach jedem API-Endpunkt
+- **E2E Tests**: Nach jedem kompletten Flow
+- **Manuelle Tests**: Nach jedem größeren Feature
+- **Kein Commit**: Ohne grüne Tests
+
+### To-Do-Größe
+- **Ideal**: 1-4 Stunden Arbeit
+- **Maximum**: 1 Tag Arbeit
+- **Zu groß?**: To-Do in kleinere To-Dos aufteilen
+- **Zu klein?**: Mehrere zusammengehörige To-Dos zusammenfassen
+
+### Definition of Done (DoD)
+Ein To-Do ist NUR fertig wenn:
+- [ ] Code implementiert
+- [ ] Tests geschrieben & grün
+- [ ] Linting bestanden
+- [ ] Code-Review durchgeführt (falls Team vorhanden)
+- [ ] Dokumentation aktualisiert (falls nötig)
+- [ ] Keine bekannten Bugs
+- [ ] Integration funktioniert (falls relevant)
+
+### Fehlerbehandlung im Prozess
+- **Tests schlagen fehl?**: Code fixen, nicht Tests anpassen (außer Test war falsch)
+- **Linting-Fehler?**: Sofort fixen, nicht ignorieren
+- **Unklare Anforderungen?**: STOPPEN, klären, dann weiter
+- **Technische Schulden entdeckt?**: In separates To-Do auslagern, nicht jetzt fixen
+
+### Kommunikation
+- **Blockiert?**: Sofort kommunizieren, nicht stundenlang grübeln
+- **To-Do größer als gedacht?**: Aufteilen oder Schätzung anpassen
+- **Unklarheit?**: Fragen stellen, nicht raten
+
+## 🏗️ Architektur-Prinzipien
+
+### Modularer Monolith (NICHT Microservices)
+- Wir bauen einen modularen Monolithen, keine Microservices
+- Klare Domänentrennung: Order, Payment, Customer, Event
+- Jede Domäne hat eigene Services, aber läuft im selben Prozess
+- Keine verteilten Transaktionen - alles in einer DB
+- Einfache Skalierung durch horizontales Scaling des gesamten Monolithen
+
+### Single Source of Truth
+- Die HUB-Datenbank ist die einzige Quelle der Wahrheit für Orders & Payments
+- Externe Systeme (WooCommerce, POS) sind nur SPOKES - keine Autorität
+- Alle Status-Änderungen gehen durch den HUB
+- Keine direkte Kommunikation zwischen SPOKES
+
+### Entkopplung & Abstraktion
+- HUB kennt keine WooCommerce-spezifischen Details
+- Payment-Provider sind über Adapter abstrahiert
+- Channels (Woo/POS/B2B) sind austauschbar
+- Keine direkten Abhängigkeiten zu externen Systemen im Core
+
+## 🔒 Sicherheit & API-Design
+
+### API-Sicherheit
+- ALLE API-Endpunkte MÜSSEN authentifiziert sein (API Keys oder OAuth2)
+- Webhook-Endpunkte MÜSSEN Signaturen validieren (Stripe, BTCPay)
+- Rate Limiting auf allen öffentlichen Endpunkten
+- Input Validation auf allen Endpunkten (JSON Schema)
+- Keine SQL-Injection: IMMER Prepared Statements / ORM
+- Keine direkten DB-Queries mit String-Interpolation
+
+### API-Versionierung
+- Alle Endpunkte unter `/api/v1/` versionieren
+- Breaking Changes = neue Version (`/api/v2/`)
+- Backward Compatibility für mindestens 1 Major Version
+- Deprecation-Warnungen in Headers
+
+### Idempotenz (KRITISCH)
+- ALLE POST/PUT/PATCH Endpunkte MÜSSEN idempotent sein
+- Idempotency-Key im Header erforderlich für kritische Operationen
+- Duplikate erkennen und gleiche Response zurückgeben
+- Keine doppelten Orders/Payments bei Retries
+
+### Webhook-Sicherheit
+- Webhook-Signaturen IMMER validieren (Stripe: X-Stripe-Signature, BTCPay: BTCPay-Sig)
+- Webhook-Payloads niemals blind vertrauen
+- Rate Limiting auf Webhook-Endpunkten
+- Idempotente Webhook-Verarbeitung (gleiche Webhook-ID = keine Duplikate)
+
+## 💾 Datenbank-Design
+
+### Transaktionssicherheit
+- Kritische Operationen (Order erstellen, Payment verarbeiten) in Transaktionen
+- ACID-Compliance für alle Status-Änderungen
+- Keine Race Conditions bei Status-Updates
+- Optimistic Locking für concurrent Updates
+
+### Historisierung & Auditing
+- JEDE Status-Änderung in History-Tabellen schreiben
+- `order_status_history` und `payment_status_history` sind Pflicht
+- Timestamps mit Timezone (UTC)
+- User/System-Information für Audit-Trail
+- Keine Löschungen (Soft Deletes mit `deleted_at`)
+
+### Datenintegrität
+- Foreign Keys für alle Referenzen
+- NOT NULL Constraints wo sinnvoll
+- Unique Constraints für Business-Keys (z.B. source + source_order_id)
+- Check Constraints für Status-Validierung
+- Indexes auf alle Foreign Keys und häufig abgefragte Spalten
+
+### Migrationen
+- Alle DB-Änderungen über Migrations
+- Keine direkten ALTER TABLE in Production
+- Rollback-fähige Migrations
+- Migrations sind versioniert und getestet
+
+## 🔄 Event-Handling & Orchestrierung
+
+### Event-Idempotenz
+- Events MÜSSEN idempotent verarbeitet werden
+- Event-ID als deduplizierungsschlüssel
+- Gleiche Event-ID = keine doppelte Verarbeitung
+- Event-History für Debugging & Reconciliation
+
+### Retry-Mechanismen
+- Exponential Backoff für fehlgeschlagene Events
+- Dead Letter Queue für Events, die nach X Retries fehlschlagen
+- Manuelle Retry-Möglichkeit für Support
+- Keine endlosen Retry-Loops
+
+### Callback-Mechanismen
+- Callbacks an Channels (Woo/POS) MÜSSEN idempotent sein
+- Retry-Logik für fehlgeschlagene Callbacks
+- Timeout-Handling (max 30s für Callbacks)
+- Callback-Status-Tracking (erfolgreich/fehlgeschlagen)
+
+## 🧪 Testing-Standards
+
+### Test-Pyramide
+- Unit Tests: 80% Coverage für Business-Logic
+- Integration Tests: Alle API-Endpunkte
+- E2E Tests: Komplette Flows (Woo → HUB → Stripe → HUB → Woo)
+- Webhook-Simulationen: Stripe CLI, BTCPay Test-Server
+
+### Test-Daten
+- Keine Production-Daten in Tests
+- Factory-Pattern für Test-Daten
+- Isolierte Test-Datenbank
+- Cleanup nach jedem Test
+
+### Test-Kritikalität
+- Payment-Flows MÜSSEN getestet sein
+- Order-Status-Transitions MÜSSEN getestet sein
+- Webhook-Handler MÜSSEN getestet sein
+- Idempotenz MUSS getestet sein
+
+## 📝 Code-Qualität & Standards
+
+### Clean Code
+- Funktionen max. 50 Zeilen
+- Klassen max. 300 Zeilen
+- DRY: Don't Repeat Yourself
+- SOLID-Prinzipien befolgen
+- Meaningful Names (keine Abkürzungen außer etablierten)
+
+### Code-Organisation
+```
+/src
+  /domains
+    /order
+      /services
+      /models
+      /repositories
+    /payment
+      /services
+      /models
+      /repositories
+    /customer
+    /event
+  /adapters
+    /woocommerce
+    /stripe
+    /btcpay
+  /api
+    /v1
+      /orders
+      /payments
+      /webhooks
+  /infrastructure
+    /database
+    /logging
+    /monitoring
+```
+
+### Linting & Formatting
+- ESLint/TSLint für TypeScript/JavaScript
+- Prettier für Code-Formatting
+- Pre-commit Hooks für Linting
+- CI/CD Pipeline bricht bei Linting-Fehlern
+
+### Type Safety
+- TypeScript STRICTLY verwenden (kein `any`)
+- Typen für alle API-Requests/Responses
+- JSON Schema Validation für externe Inputs
+- Runtime-Validierung mit Zod/Joi
+
+## 🚀 Deployment & CI/CD
+
+### CI/CD-Pipeline
+- Automatische Tests bei jedem Commit
+- Linting & Type-Checking vor Merge
+- Automatisches Deployment nach erfolgreichen Tests
+- Staging-Environment vor Production
+- Rollback-Strategie vorhanden
+
+### Environment-Management
+- Keine Secrets im Code
+- Environment Variables für alle Konfigurationen
+- Separate Configs für Dev/Staging/Production
+- Database Migrations automatisch bei Deployment
+
+### Monitoring & Observability
+- Strukturierte Logs (JSON-Format)
+- Log-Level: DEBUG, INFO, WARN, ERROR
+- Request-ID für Request-Tracking
+- Health-Checks für alle Services
+- Metrics für kritische Operationen (Order-Creation, Payment-Processing)
+
+## 🔌 Integration-Standards
+
+### Payment-Provider-Adapter
+- Einheitliche Adapter-Interface für alle Provider
+- Provider-spezifische Logik isoliert
+- Fehlerbehandlung pro Provider
+- Retry-Logik pro Provider konfigurierbar
+
+### Channel-Adapter (WooCommerce, POS, B2B)
+- Mapping-Logik in Adaptern, nicht im Core
+- Channel-spezifische Daten in `metadata` JSON-Feld
+- Callback-URLs pro Channel konfigurierbar
+- Fehlerbehandlung & Reconciliation pro Channel
+
+### Webhook-Handler
+- Provider-spezifische Handler (Stripe, BTCPay)
+- Signature-Validierung MUSS
+- Idempotente Verarbeitung
+- Async-Verarbeitung für lange Operationen
+
+## 🚫 NOT-TO-DO Liste
+
+### Was NIEMALS in den HUB gehört:
+- ❌ Frontend-Logik (UI, Templates, CSS)
+- ❌ WooCommerce-spezifische Business-Logik
+- ❌ Payment-Provider-spezifische Logik im Core (nur in Adaptern)
+- ❌ Direkte Datenbank-Zugriffe ohne Repository-Pattern
+- ❌ Hardcoded Secrets oder API-Keys
+- ❌ Synchrones Blocking auf externe APIs (außer kritischen Flows)
+- ❌ Keine Validierung von Inputs
+- ❌ Keine Error-Handling
+- ❌ Direkte SQL-Queries mit String-Interpolation
+- ❌ Keine Transaktionen bei kritischen Operationen
+- ❌ Keine Idempotenz-Checks
+- ❌ Keine Webhook-Signatur-Validierung
+
+## 📊 Performance & Skalierung
+
+### Datenbank-Performance
+- Indexes auf alle Foreign Keys
+- Indexes auf häufig abgefragte Spalten (status, source, created_at)
+- Partitioning für große History-Tabellen (nach Datum)
+- Query-Optimierung (keine N+1 Queries)
+
+### API-Performance
+- Pagination für List-Endpunkte (max 100 Items pro Request)
+- Caching für nicht-kritische Daten (Customer-Info, etc.)
+- Async-Verarbeitung für nicht-kritische Operationen
+- Timeout-Handling für externe API-Calls (max 30s)
+
+## 🔍 Code-Review-Checkliste
+
+Vor jedem Merge prüfen:
+- [ ] Idempotenz implementiert?
+- [ ] Input Validation vorhanden?
+- [ ] Error Handling vorhanden?
+- [ ] Tests geschrieben?
+- [ ] Linting bestanden?
+- [ ] Keine Secrets im Code?
+- [ ] Transaktionen für kritische Operationen?
+- [ ] History-Tabellen aktualisiert?
+- [ ] Logging vorhanden?
+- [ ] Dokumentation aktualisiert?
+
+## 🎯 Prioritäten
+
+### P0 (Kritisch - Blockiert Release)
+- Payment-Processing funktioniert
+- Order-Status-Synchronisation funktioniert
+- Webhook-Signatur-Validierung
+- Idempotenz für alle kritischen Endpunkte
+
+### P1 (Wichtig - Sollte im MVP sein)
+- WooCommerce Integration
+- Stripe Integration
+- Order/Payment History
+- Error Handling & Logging
+
+### P2 (Nice-to-Have - Kann später kommen)
+- BTCPay Integration
+- POS Integration
+- B2B-Vertragsstrecke
+- Erweiterte Monitoring-Dashboards
+
+---
+
+**Diese Regeln sind bindend für alle Entwickler. Bei Fragen oder Unklarheiten: CTO konsultieren.**
+
+
+
+## 🔄 Arbeitsprozess & Entwicklungsmethodik
+
+### Iterative Entwicklung mit To-Do-Management
+- **IMMER zuerst**: Saubere, spezifische To-Dos definieren bevor Code geschrieben wird
+- **To-Do-Struktur**: Jedes To-Do muss klar, testbar und abgrenzbar sein
+- **Schritt-für-Schritt**: Nur EIN To-Do zur Zeit bearbeiten
+- **Test-First**: Jeder Schritt MUSS getestet sein, bevor der nächste beginnt
+- **Keine Parallel-Entwicklung**: Kein neues Feature starten, wenn das aktuelle nicht getestet ist
+
+### To-Do-Definition (Pflicht vor jedem Feature)
+Jedes To-Do MUSS enthalten:
+1. **Klare Beschreibung**: Was wird implementiert?
+2. **Akzeptanzkriterien**: Wann ist es fertig?
+3. **Test-Plan**: Wie wird es getestet?
+4. **Abhängigkeiten**: Was muss vorher fertig sein?
+5. **Schätzung**: Realistische Zeitschätzung
+
+### Entwicklungszyklus (STRICT)
+```
+1. To-Do definieren & dokumentieren
+   ↓
+2. Tests schreiben (TDD wenn möglich)
+   ↓
+3. Minimaler Code für To-Do
+   ↓
+4. Tests laufen lassen & grün bekommen
+   ↓
+5. Code-Review (selbst oder Team)
+   ↓
+6. Linting & Formatting prüfen
+   ↓
+7. Integration testen (falls relevant)
+   ↓
+8. To-Do als "Done" markieren
+   ↓
+9. NÄCHSTES To-Do starten
+```
+
+### Testing zwischen Schritten
+- **Unit Tests**: Nach jeder Funktion/Methode
+- **Integration Tests**: Nach jedem API-Endpunkt
+- **E2E Tests**: Nach jedem kompletten Flow
+- **Manuelle Tests**: Nach jedem größeren Feature
+- **Kein Commit**: Ohne grüne Tests
+
+### To-Do-Größe
+- **Ideal**: 1-4 Stunden Arbeit
+- **Maximum**: 1 Tag Arbeit
+- **Zu groß?**: To-Do in kleinere To-Dos aufteilen
+- **Zu klein?**: Mehrere zusammengehörige To-Dos zusammenfassen
+
+### Definition of Done (DoD)
+Ein To-Do ist NUR fertig wenn:
+- [ ] Code implementiert
+- [ ] Tests geschrieben & grün
+- [ ] Linting bestanden
+- [ ] Code-Review durchgeführt (falls Team vorhanden)
+- [ ] Dokumentation aktualisiert (falls nötig)
+- [ ] Keine bekannten Bugs
+- [ ] Integration funktioniert (falls relevant)
+
+### Fehlerbehandlung im Prozess
+- **Tests schlagen fehl?**: Code fixen, nicht Tests anpassen (außer Test war falsch)
+- **Linting-Fehler?**: Sofort fixen, nicht ignorieren
+- **Unklare Anforderungen?**: STOPPEN, klären, dann weiter
+- **Technische Schulden entdeckt?**: In separates To-Do auslagern, nicht jetzt fixen
+
+### Kommunikation
+- **Blockiert?**: Sofort kommunizieren, nicht stundenlang grübeln
+- **To-Do größer als gedacht?**: Aufteilen oder Schätzung anpassen
+- **Unklarheit?**: Fragen stellen, nicht raten
+
+## 🏗️ Architektur-Prinzipien
+
+### Modularer Monolith (NICHT Microservices)
+- Wir bauen einen modularen Monolithen, keine Microservices
+- Klare Domänentrennung: Order, Payment, Customer, Event
+- Jede Domäne hat eigene Services, aber läuft im selben Prozess
+- Keine verteilten Transaktionen - alles in einer DB
+- Einfache Skalierung durch horizontales Scaling des gesamten Monolithen
+
+### Single Source of Truth
+- Die HUB-Datenbank ist die einzige Quelle der Wahrheit für Orders & Payments
+- Externe Systeme (WooCommerce, POS) sind nur SPOKES - keine Autorität
+- Alle Status-Änderungen gehen durch den HUB
+- Keine direkte Kommunikation zwischen SPOKES
+
+### Entkopplung & Abstraktion
+- HUB kennt keine WooCommerce-spezifischen Details
+- Payment-Provider sind über Adapter abstrahiert
+- Channels (Woo/POS/B2B) sind austauschbar
+- Keine direkten Abhängigkeiten zu externen Systemen im Core
+
+## 🔒 Sicherheit & API-Design
+
+### API-Sicherheit
+- ALLE API-Endpunkte MÜSSEN authentifiziert sein (API Keys oder OAuth2)
+- Webhook-Endpunkte MÜSSEN Signaturen validieren (Stripe, BTCPay)
+- Rate Limiting auf allen öffentlichen Endpunkten
+- Input Validation auf allen Endpunkten (JSON Schema)
+- Keine SQL-Injection: IMMER Prepared Statements / ORM
+- Keine direkten DB-Queries mit String-Interpolation
+
+### API-Versionierung
+- Alle Endpunkte unter `/api/v1/` versionieren
+- Breaking Changes = neue Version (`/api/v2/`)
+- Backward Compatibility für mindestens 1 Major Version
+- Deprecation-Warnungen in Headers
+
+### Idempotenz (KRITISCH)
+- ALLE POST/PUT/PATCH Endpunkte MÜSSEN idempotent sein
+- Idempotency-Key im Header erforderlich für kritische Operationen
+- Duplikate erkennen und gleiche Response zurückgeben
+- Keine doppelten Orders/Payments bei Retries
+
+### Webhook-Sicherheit
+- Webhook-Signaturen IMMER validieren (Stripe: X-Stripe-Signature, BTCPay: BTCPay-Sig)
+- Webhook-Payloads niemals blind vertrauen
+- Rate Limiting auf Webhook-Endpunkten
+- Idempotente Webhook-Verarbeitung (gleiche Webhook-ID = keine Duplikate)
+
+## 💾 Datenbank-Design
+
+### Transaktionssicherheit
+- Kritische Operationen (Order erstellen, Payment verarbeiten) in Transaktionen
+- ACID-Compliance für alle Status-Änderungen
+- Keine Race Conditions bei Status-Updates
+- Optimistic Locking für concurrent Updates
+
+### Historisierung & Auditing
+- JEDE Status-Änderung in History-Tabellen schreiben
+- `order_status_history` und `payment_status_history` sind Pflicht
+- Timestamps mit Timezone (UTC)
+- User/System-Information für Audit-Trail
+- Keine Löschungen (Soft Deletes mit `deleted_at`)
+
+### Datenintegrität
+- Foreign Keys für alle Referenzen
+- NOT NULL Constraints wo sinnvoll
+- Unique Constraints für Business-Keys (z.B. source + source_order_id)
+- Check Constraints für Status-Validierung
+- Indexes auf alle Foreign Keys und häufig abgefragte Spalten
+
+### Migrationen
+- Alle DB-Änderungen über Migrations
+- Keine direkten ALTER TABLE in Production
+- Rollback-fähige Migrations
+- Migrations sind versioniert und getestet
+
+## 🔄 Event-Handling & Orchestrierung
+
+### Event-Idempotenz
+- Events MÜSSEN idempotent verarbeitet werden
+- Event-ID als deduplizierungsschlüssel
+- Gleiche Event-ID = keine doppelte Verarbeitung
+- Event-History für Debugging & Reconciliation
+
+### Retry-Mechanismen
+- Exponential Backoff für fehlgeschlagene Events
+- Dead Letter Queue für Events, die nach X Retries fehlschlagen
+- Manuelle Retry-Möglichkeit für Support
+- Keine endlosen Retry-Loops
+
+### Callback-Mechanismen
+- Callbacks an Channels (Woo/POS) MÜSSEN idempotent sein
+- Retry-Logik für fehlgeschlagene Callbacks
+- Timeout-Handling (max 30s für Callbacks)
+- Callback-Status-Tracking (erfolgreich/fehlgeschlagen)
+
+## 🧪 Testing-Standards
+
+### Test-Pyramide
+- Unit Tests: 80% Coverage für Business-Logic
+- Integration Tests: Alle API-Endpunkte
+- E2E Tests: Komplette Flows (Woo → HUB → Stripe → HUB → Woo)
+- Webhook-Simulationen: Stripe CLI, BTCPay Test-Server
+
+### Test-Daten
+- Keine Production-Daten in Tests
+- Factory-Pattern für Test-Daten
+- Isolierte Test-Datenbank
+- Cleanup nach jedem Test
+
+### Test-Kritikalität
+- Payment-Flows MÜSSEN getestet sein
+- Order-Status-Transitions MÜSSEN getestet sein
+- Webhook-Handler MÜSSEN getestet sein
+- Idempotenz MUSS getestet sein
+
+## 📝 Code-Qualität & Standards
+
+### Clean Code
+- Funktionen max. 50 Zeilen
+- Klassen max. 300 Zeilen
+- DRY: Don't Repeat Yourself
+- SOLID-Prinzipien befolgen
+- Meaningful Names (keine Abkürzungen außer etablierten)
+
+### Code-Organisation
+```
+/src
+  /domains
+    /order
+      /services
+      /models
+      /repositories
+    /payment
+      /services
+      /models
+      /repositories
+    /customer
+    /event
+  /adapters
+    /woocommerce
+    /stripe
+    /btcpay
+  /api
+    /v1
+      /orders
+      /payments
+      /webhooks
+  /infrastructure
+    /database
+    /logging
+    /monitoring
+```
+
+### Linting & Formatting
+- ESLint/TSLint für TypeScript/JavaScript
+- Prettier für Code-Formatting
+- Pre-commit Hooks für Linting
+- CI/CD Pipeline bricht bei Linting-Fehlern
+
+### Type Safety
+- TypeScript STRICTLY verwenden (kein `any`)
+- Typen für alle API-Requests/Responses
+- JSON Schema Validation für externe Inputs
+- Runtime-Validierung mit Zod/Joi
+
+## 🚀 Deployment & CI/CD
+
+### CI/CD-Pipeline
+- Automatische Tests bei jedem Commit
+- Linting & Type-Checking vor Merge
+- Automatisches Deployment nach erfolgreichen Tests
+- Staging-Environment vor Production
+- Rollback-Strategie vorhanden
+
+### Environment-Management
+- Keine Secrets im Code
+- Environment Variables für alle Konfigurationen
+- Separate Configs für Dev/Staging/Production
+- Database Migrations automatisch bei Deployment
+
+### Monitoring & Observability
+- Strukturierte Logs (JSON-Format)
+- Log-Level: DEBUG, INFO, WARN, ERROR
+- Request-ID für Request-Tracking
+- Health-Checks für alle Services
+- Metrics für kritische Operationen (Order-Creation, Payment-Processing)
+
+## 🔌 Integration-Standards
+
+### Payment-Provider-Adapter
+- Einheitliche Adapter-Interface für alle Provider
+- Provider-spezifische Logik isoliert
+- Fehlerbehandlung pro Provider
+- Retry-Logik pro Provider konfigurierbar
+
+### Channel-Adapter (WooCommerce, POS, B2B)
+- Mapping-Logik in Adaptern, nicht im Core
+- Channel-spezifische Daten in `metadata` JSON-Feld
+- Callback-URLs pro Channel konfigurierbar
+- Fehlerbehandlung & Reconciliation pro Channel
+
+### Webhook-Handler
+- Provider-spezifische Handler (Stripe, BTCPay)
+- Signature-Validierung MUSS
+- Idempotente Verarbeitung
+- Async-Verarbeitung für lange Operationen
+
+## 🚫 NOT-TO-DO Liste
+
+### Was NIEMALS in den HUB gehört:
+- ❌ Frontend-Logik (UI, Templates, CSS)
+- ❌ WooCommerce-spezifische Business-Logik
+- ❌ Payment-Provider-spezifische Logik im Core (nur in Adaptern)
+- ❌ Direkte Datenbank-Zugriffe ohne Repository-Pattern
+- ❌ Hardcoded Secrets oder API-Keys
+- ❌ Synchrones Blocking auf externe APIs (außer kritischen Flows)
+- ❌ Keine Validierung von Inputs
+- ❌ Keine Error-Handling
+- ❌ Direkte SQL-Queries mit String-Interpolation
+- ❌ Keine Transaktionen bei kritischen Operationen
+- ❌ Keine Idempotenz-Checks
+- ❌ Keine Webhook-Signatur-Validierung
+
+## 📊 Performance & Skalierung
+
+### Datenbank-Performance
+- Indexes auf alle Foreign Keys
+- Indexes auf häufig abgefragte Spalten (status, source, created_at)
+- Partitioning für große History-Tabellen (nach Datum)
+- Query-Optimierung (keine N+1 Queries)
+
+### API-Performance
+- Pagination für List-Endpunkte (max 100 Items pro Request)
+- Caching für nicht-kritische Daten (Customer-Info, etc.)
+- Async-Verarbeitung für nicht-kritische Operationen
+- Timeout-Handling für externe API-Calls (max 30s)
+
+## 🔍 Code-Review-Checkliste
+
+Vor jedem Merge prüfen:
+- [ ] Idempotenz implementiert?
+- [ ] Input Validation vorhanden?
+- [ ] Error Handling vorhanden?
+- [ ] Tests geschrieben?
+- [ ] Linting bestanden?
+- [ ] Keine Secrets im Code?
+- [ ] Transaktionen für kritische Operationen?
+- [ ] History-Tabellen aktualisiert?
+- [ ] Logging vorhanden?
+- [ ] Dokumentation aktualisiert?
+
+## 🎯 Prioritäten
+
+### P0 (Kritisch - Blockiert Release)
+- Payment-Processing funktioniert
+- Order-Status-Synchronisation funktioniert
+- Webhook-Signatur-Validierung
+- Idempotenz für alle kritischen Endpunkte
+
+### P1 (Wichtig - Sollte im MVP sein)
+- WooCommerce Integration
+- Stripe Integration
+- Order/Payment History
+- Error Handling & Logging
+
+### P2 (Nice-to-Have - Kann später kommen)
+- BTCPay Integration
+- POS Integration
+- B2B-Vertragsstrecke
+- Erweiterte Monitoring-Dashboards
+
+---
+
+**Diese Regeln sind bindend für alle Entwickler. Bei Fragen oder Unklarheiten: CTO konsultieren.**
+
