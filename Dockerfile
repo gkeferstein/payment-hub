@@ -15,6 +15,9 @@ RUN npm install
 # Copy source
 COPY . .
 
+# Set production API URL for build
+ENV VITE_API_URL=https://paymentsapi.mojo-institut.de
+
 # Build application
 RUN npm run build
 

@@ -52,7 +52,17 @@ const TestConnectionButton = () => {
   const handleTest = async () => {
     try {
       const apiKey = localStorage.getItem('apiKey');
-      const response = await fetch(`http://paymentsapi.mojo-institut.de/api/v1/providers/${record.id}/test`, {
+      // Use HTTPS API URL when running in production
+      const getApiUrl = () => {
+        if (typeof window === 'undefined') return 'http://localhost:3000';
+        const hostname = window.location.hostname;
+        // Use HTTPS for any production domain (not localhost)
+        if (hostname !== 'localhost' && hostname !== '127.0.0.1' && !hostname.startsWith('192.168.')) {
+          return 'https://paymentsapi.mojo-institut.de';
+        }
+        return 'http://localhost:3000';
+      };
+      const response = await fetch(`${getApiUrl()}/api/v1/providers/${record.id}/test`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,

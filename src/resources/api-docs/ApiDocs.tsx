@@ -15,11 +15,14 @@ import {
   RefreshCw,
   Shield,
   Zap,
-  CreditCard
+  CreditCard,
+  Settings,
+  ShoppingCart,
+  CheckCircle2
 } from 'lucide-react';
 
 export const ApiDocs = () => {
-  const [activeSection, setActiveSection] = useState<'intro' | 'orders' | 'payments' | 'webhooks' | 'callbacks'>('intro');
+  const [activeSection, setActiveSection] = useState<'intro' | 'orders' | 'payments' | 'webhooks' | 'callbacks' | 'settings' | 'channels'>('intro');
   const apiBaseUrl = 'https://paymentsapi.mojo-institut.de';
 
   return (
@@ -37,13 +40,15 @@ export const ApiDocs = () => {
 
       {/* Navigation */}
       <div className="flex flex-wrap gap-2">
-        {[
-          { id: 'intro', label: 'Quick Start', icon: Zap },
-          { id: 'orders', label: 'Orders API', icon: Code },
-          { id: 'payments', label: 'Payments API', icon: CreditCard },
-          { id: 'webhooks', label: 'Webhooks', icon: Webhook },
-          { id: 'callbacks', label: 'Callbacks', icon: RefreshCw },
-        ].map(({ id, label, icon: Icon }) => (
+      {[
+        { id: 'intro', label: 'Quick Start', icon: Zap },
+        { id: 'orders', label: 'Orders API', icon: Code },
+        { id: 'payments', label: 'Payments API', icon: CreditCard },
+        { id: 'webhooks', label: 'Webhooks', icon: Webhook },
+        { id: 'callbacks', label: 'Callbacks', icon: RefreshCw },
+        { id: 'settings', label: 'Settings API', icon: Settings },
+        { id: 'channels', label: 'Channels', icon: ShoppingCart },
+      ].map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setActiveSection(id as any)}
@@ -65,6 +70,8 @@ export const ApiDocs = () => {
       {activeSection === 'payments' && <PaymentsSection apiBaseUrl={apiBaseUrl} />}
       {activeSection === 'webhooks' && <WebhooksSection apiBaseUrl={apiBaseUrl} />}
       {activeSection === 'callbacks' && <CallbacksSection />}
+      {activeSection === 'settings' && <SettingsSection apiBaseUrl={apiBaseUrl} />}
+      {activeSection === 'channels' && <ChannelsSection />}
     </div>
   );
 };
@@ -430,5 +437,132 @@ if (!hash_equals($expected, $signature)) {
     </div>
   );
 };
+
+// Settings Section
+const SettingsSection = ({ apiBaseUrl }: { apiBaseUrl: string }) => (
+  <div className="space-y-6">
+    <Card>
+      <CardHeader>
+        <CardTitle>GET /api/v1/settings</CardTitle>
+        <CardDescription>Get current system settings including Sandbox Mode and Channel configurations</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="bg-muted p-4 rounded-lg font-mono text-xs overflow-x-auto">
+          <pre>{`GET ${apiBaseUrl}/api/v1/settings
+Authorization: Bearer <your-api-key>`}</pre>
+        </div>
+        <div>
+          <p className="text-sm font-medium mb-2">Response:</p>
+          <div className="bg-muted p-4 rounded-lg font-mono text-xs overflow-x-auto">
+            <pre>{JSON.stringify({
+              success: true,
+              data: {
+                sandbox_mode: true,
+                channels: [
+                  {
+                    channel: 'woocommerce',
+                    use_payment_hub: false,
+                    shadow_mode: true,
+                    callback_enabled: false,
+                  },
+                ],
+              },
+            }, null, 2)}</pre>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+
+    <Card>
+      <CardHeader>
+        <CardTitle>PUT /api/v1/settings/channels/:channel</CardTitle>
+        <CardDescription>Update channel configuration</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="bg-muted p-4 rounded-lg font-mono text-xs overflow-x-auto">
+          <pre>{`PUT ${apiBaseUrl}/api/v1/settings/channels/woocommerce
+Authorization: Bearer <your-api-key>
+Content-Type: application/json
+
+{
+  "shadow_mode": true,
+  "use_payment_hub": false,
+  "callback_enabled": false
+}`}</pre>
+        </div>
+        <div>
+          <p className="text-sm font-medium mb-2">Valid Channels:</p>
+          <div className="space-y-1">
+            <div className="flex gap-2"><Badge>woocommerce</Badge></div>
+            <div className="flex gap-2"><Badge>pos</Badge></div>
+            <div className="flex gap-2"><Badge>b2b</Badge></div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  </div>
+);
+
+// Channels Section
+const ChannelsSection = () => (
+  <div className="space-y-6">
+    <Card className="border-blue-200 bg-blue-50 dark:bg-blue-900/20">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <ShoppingCart className="h-5 w-5" />
+          Channel Integration Overview
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm">
+          Channels (WooCommerce, POS, B2B) can be configured to run in Shadow Mode (monitoring only)
+          or actively use Payment Hub for payment processing.
+        </p>
+      </CardContent>
+    </Card>
+
+    <Card>
+      <CardHeader>
+        <CardTitle>Shadow Mode</CardTitle>
+        <CardDescription>Monitor-only mode - no active processing</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 p-3 rounded-lg">
+          <p className="text-sm text-yellow-800 dark:text-yellow-200">
+            <AlertCircle className="h-4 w-4 inline mr-1" />
+            When Shadow Mode is enabled:
+          </p>
+          <ul className="text-sm text-yellow-800 dark:text-yellow-200 mt-2 ml-6 list-disc">
+            <li>Payment Hub only monitors orders/payments</li>
+            <li>No callbacks are sent</li>
+            <li>No status updates are made</li>
+            <li>Perfect for parallel testing without affecting existing flows</li>
+          </ul>
+        </div>
+      </CardContent>
+    </Card>
+
+    <Card>
+      <CardHeader>
+        <CardTitle>Active Mode</CardTitle>
+        <CardDescription>Full Payment Hub integration</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 p-3 rounded-lg">
+          <p className="text-sm text-green-800 dark:text-green-200">
+            <CheckCircle2 className="h-4 w-4 inline mr-1" />
+            When Active Mode is enabled:
+          </p>
+          <ul className="text-sm text-green-800 dark:text-green-200 mt-2 ml-6 list-disc">
+            <li>Payment Hub processes all orders/payments</li>
+            <li>Callbacks are sent to channels</li>
+            <li>Status updates are synchronized</li>
+            <li>Full integration with payment providers</li>
+          </ul>
+        </div>
+      </CardContent>
+    </Card>
+  </div>
+);
 
 export default ApiDocs;
