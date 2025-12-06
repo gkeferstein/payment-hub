@@ -39,6 +39,9 @@ COPY --from=builder /app/dist/infrastructure/database/migrations ./dist/infrastr
 # Remove .d.ts files from migrations
 RUN find /app/dist/infrastructure/database/migrations -name "*.d.ts" -type f -delete || true
 
+# Copy docs directory (for plugin downloads)
+COPY docs ./docs
+
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
