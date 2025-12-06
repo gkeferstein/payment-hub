@@ -9,6 +9,8 @@ import paymentsRoutes from './payments/payments.routes';
 import webhooksRoutes from './webhooks/webhooks.routes';
 import providersRoutes from './providers/providers.routes';
 import terminalRoutes from './terminal/terminal.routes';
+import settingsRoutes from './settings/settings.routes';
+import apiKeysRoutes from './api-keys/api-keys.routes';
 
 const router = Router();
 
@@ -18,6 +20,8 @@ router.use('/payments', paymentsRoutes);
 router.use('/webhooks', webhooksRoutes);
 router.use('/providers', providersRoutes);
 router.use('/terminal', terminalRoutes);
+router.use('/settings', settingsRoutes);
+router.use('/api-keys', apiKeysRoutes);
 
 // API v1 health check
 router.get('/health', (_req, res) => {

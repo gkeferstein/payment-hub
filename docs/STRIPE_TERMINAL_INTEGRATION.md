@@ -234,3 +234,12 @@ STRIPE_WEBHOOK_SECRET=whsec_xxx  # Webhook Secret für Signature-Validierung
 **Version:** 1.0.0  
 **Stand:** 2025-12-05
 
+
+
+
+
+
+
+
+
+

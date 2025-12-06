@@ -4,10 +4,21 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
+import { ApiKeyService } from '../../infrastructure/auth/api-key.service';
+
+// Cache for API key service (singleton)
+let apiKeyService: ApiKeyService | null = null;
+
+function getApiKeyService(): ApiKeyService {
+  if (!apiKeyService) {
+    apiKeyService = new ApiKeyService();
+  }
+  return apiKeyService;
+}
 
 /**
  * API Key authentication middleware
- * Validates the API key from the Authorization header
+ * Validates the API key from the Authorization header against database
  * 
  * Usage: Authorization: Bearer <api_key>
  */
@@ -36,9 +47,9 @@ export function authenticateApiKey(req: Request, res: Response, next: NextFuncti
     return;
   }
 
-  const apiKey = authHeader.substring(7);
+  const plainKey = authHeader.substring(7);
 
-  if (!apiKey || apiKey.length < 10) {
+  if (!plainKey || plainKey.length < 10) {
     res.status(401).json({
       success: false,
       error: {
@@ -49,6 +60,34 @@ export function authenticateApiKey(req: Request, res: Response, next: NextFuncti
     return;
   }
 
-  (req as any).apiKey = apiKey;
-  next();
+  // Validate against database (async)
+  const service = getApiKeyService();
+  service.validate(plainKey)
+    .then((apiKey) => {
+      if (!apiKey) {
+        res.status(401).json({
+          success: false,
+          error: {
+            message: 'Invalid or expired API key',
+            code: 'UNAUTHORIZED',
+          },
+        });
+        return;
+      }
+
+      // Attach API key info to request
+      (req as any).apiKey = plainKey;
+      (req as any).apiKeyInfo = apiKey;
+      next();
+    })
+    .catch((error: any) => {
+      console.error('Error validating API key:', error);
+      res.status(500).json({
+        success: false,
+        error: {
+          message: 'Error validating API key',
+          code: 'INTERNAL_ERROR',
+        },
+      });
+    });
 }

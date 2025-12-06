@@ -45,3 +45,12 @@ export interface TerminalPaymentStatusResponse {
   };
 }
 
+
+
+
+
+
+
+
+
+

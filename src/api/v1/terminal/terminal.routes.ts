@@ -5,8 +5,8 @@
 
 import { Router } from 'express';
 import { terminalController } from './terminal.controller';
-import { authMiddleware } from '../../middleware/auth.middleware';
-import { idempotencyMiddleware } from '../../middleware/idempotency.middleware';
+import { authenticateApiKey } from '../../middleware';
+import { checkIdempotency } from '../../middleware';
 
 const router = Router();
 
@@ -17,7 +17,7 @@ const router = Router();
  */
 router.post(
   '/connection-token',
-  authMiddleware,
+  authenticateApiKey,
   terminalController.createConnectionToken.bind(terminalController)
 );
 
@@ -28,8 +28,8 @@ router.post(
  */
 router.post(
   '/payment-intent',
-  authMiddleware,
-  idempotencyMiddleware,
+  authenticateApiKey,
+  checkIdempotency,
   terminalController.createTerminalPaymentIntent.bind(terminalController)
 );
 
@@ -40,9 +40,10 @@ router.post(
  */
 router.get(
   '/payment/:paymentId/status',
-  authMiddleware,
+  authenticateApiKey,
   terminalController.getTerminalPaymentStatus.bind(terminalController)
 );
 
 export default router;
+
 

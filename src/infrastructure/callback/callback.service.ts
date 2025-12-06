@@ -6,6 +6,8 @@
 
 import { Order } from '../../domains/order/models';
 import { Payment } from '../../domains/payment/models';
+import { ConfigService } from '../config/config.service';
+import { ChannelConfigService } from '../config/channel-config.service';
 import crypto from 'crypto';
 
 interface CallbackPayload {
@@ -27,6 +29,12 @@ export class CallbackService {
    * Send callback when order status changes
    */
   async sendOrderCallback(order: Order, payment?: Payment): Promise<void> {
+    // Check if callbacks are enabled for this channel
+    if (!(await ChannelConfigService.shouldSendCallbacks(order.source))) {
+      console.log(`[CALLBACK] Callbacks disabled for channel ${order.source} (shadow mode or disabled)`);
+      return;
+    }
+
     const callbackUrl = this.getCallbackUrl(order.source);
     if (!callbackUrl) {
       console.log(`No callback URL configured for source: ${order.source}`);
@@ -57,6 +65,12 @@ export class CallbackService {
    * Send callback when payment status changes
    */
   async sendPaymentCallback(payment: Payment, order: Order): Promise<void> {
+    // Check if callbacks are enabled for this channel
+    if (!(await ChannelConfigService.shouldSendCallbacks(order.source))) {
+      console.log(`[CALLBACK] Callbacks disabled for channel ${order.source} (shadow mode or disabled)`);
+      return;
+    }
+
     const callbackUrl = this.getCallbackUrl(order.source);
     if (!callbackUrl) {
       console.log(`No callback URL configured for source: ${order.source}`);
@@ -89,6 +103,16 @@ export class CallbackService {
     source: string,
     maxRetries: number = 3
   ): Promise<void> {
+    // In sandbox mode, only log callbacks, don't actually send them
+    if (!ConfigService.shouldSendCallbacks()) {
+      console.log('[SANDBOX] Callback would be sent (not actually sent in sandbox mode):', {
+        url,
+        source,
+        payload,
+      });
+      return;
+    }
+
     let lastError: Error | null = null;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {

@@ -16,6 +16,8 @@ import {
   isValidPaymentStatusTransition,
 } from '../models';
 import { StripeTerminalAdapter } from '../../../adapters/stripe/stripe-terminal.adapter';
+import { StripeMockAdapter } from '../../../adapters/stripe/stripe-mock.adapter';
+import { ConfigService } from '../../../infrastructure/config/config.service';
 
 export class PaymentService {
   /**
@@ -142,15 +144,20 @@ export class PaymentService {
       throw new Error('amount must be greater than 0');
     }
 
-    // Get Stripe API key
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const stripeApiKey = (process as any).env?.STRIPE_SECRET_KEY;
-    if (!stripeApiKey) {
-      throw new Error('STRIPE_SECRET_KEY environment variable is not set');
+    // Use mock adapter in sandbox mode, real adapter otherwise
+    let terminalAdapter: StripeTerminalAdapter | StripeMockAdapter;
+    
+    if (ConfigService.isSandboxMode()) {
+      console.log('[SANDBOX] Using mock Stripe adapter for terminal payment');
+      terminalAdapter = new StripeMockAdapter();
+    } else {
+      // Get Stripe API key
+      const stripeApiKey = ConfigService.getStripeApiKey();
+      if (!stripeApiKey) {
+        throw new Error('STRIPE_SECRET_KEY environment variable is not set');
+      }
+      terminalAdapter = new StripeTerminalAdapter(stripeApiKey);
     }
-
-    // Create Stripe Terminal adapter
-    const terminalAdapter = new StripeTerminalAdapter(stripeApiKey);
 
     // Create Terminal Payment Intent
     const terminalResponse = await terminalAdapter.createTerminalPaymentIntent({
@@ -189,8 +196,6 @@ export class PaymentService {
     });
 
     return updatedPayment || payment;
-
-    return payment;
   }
 
   /**

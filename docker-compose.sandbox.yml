@@ -1,0 +1,27 @@
+version: '3.8'
+
+# Docker Compose Override for Sandbox/Test Mode
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.sandbox.yml up
+
+services:
+  backend:
+    environment:
+      # Enable sandbox mode
+      SANDBOX_MODE: "true"
+      # Use sandbox database
+      DB_NAME: ${DB_NAME:-order_hub_sandbox}
+      # Enable debug logging
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+      # Optional: Use Stripe test keys if you want to test with real Stripe test mode
+      # Otherwise, mock adapter will be used
+      STRIPE_TEST_SECRET_KEY: ${STRIPE_TEST_SECRET_KEY:-}
+      STRIPE_TEST_WEBHOOK_SECRET: ${STRIPE_TEST_WEBHOOK_SECRET:-}
+
+
+
+
+
+
+
+
+

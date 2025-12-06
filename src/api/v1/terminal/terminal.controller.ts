@@ -14,7 +14,7 @@ import {
   CreateTerminalPaymentIntentResponse,
   TerminalPaymentStatusResponse,
 } from './terminal.types';
-import { PaymentMethod } from '../../../domains/payment/models';
+// PaymentMethod type is used in types, not directly imported here
 
 export class TerminalController {
   private getStripeTerminalAdapter(): StripeTerminalAdapter {
@@ -189,4 +189,5 @@ export class TerminalController {
 }
 
 export const terminalController = new TerminalController();
+
 

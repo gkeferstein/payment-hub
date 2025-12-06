@@ -33,7 +33,7 @@ export class StripeTerminalAdapter {
 
   constructor(apiKey: string) {
     this.stripe = new Stripe(apiKey, {
-      apiVersion: '2024-12-18.acacia',
+      apiVersion: '2023-10-16',
     });
   }
 
@@ -153,4 +153,5 @@ export class StripeTerminalAdapter {
     }
   }
 }
+
 
